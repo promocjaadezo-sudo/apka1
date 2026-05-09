@@ -1,9 +1,9 @@
-
+<!doctype html>
 <html lang="pl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ADEZO Premium Concierge Form v1.5</title>
+  <title>ADEZO Premium Concierge Form v1.6</title>
   <style>
     :root{
       --bg:#0f0d0a;
@@ -308,7 +308,7 @@
       ...data,
       lead_score: lead.score,
       lead_temperature: lead.temperature,
-      source_form: 'ADEZO Premium Concierge Form v1.5',
+      source_form: 'ADEZO Premium Concierge Form v1.6',
       created_at: new Date().toISOString()
     };
 
@@ -328,11 +328,11 @@ ${JSON.stringify(payload, null, 2)}`;
 
     fetch('https://hook.eu1.make.com/pyge2gqklkfkrkrmzsih9sat3drexsfl', {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then(() => {
+    .then(async response => {
+      if (!response.ok) throw new Error('Webhook error: ' + response.status);
       error.textContent = '';
       success.textContent = 'Dziękujemy. Zgłoszenie zostało wysłane do doradcy ADEZO.';
       success.classList.remove('hidden');
