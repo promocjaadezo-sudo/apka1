@@ -94,6 +94,27 @@
     .score{font-weight:900;color:var(--gold2)}
     .error{color:#ffb4a8;font-size:13px;margin-top:10px}
     .success{color:#b8f3c8;font-size:14px;margin-top:12px}
+    .models-link{
+      display:inline-flex;
+      margin-top:18px;
+      padding:13px 20px;
+      border-radius:999px;
+      background:linear-gradient(90deg,var(--gold),var(--gold2));
+      color:#17110a;
+      font-weight:900;
+      text-decoration:none;
+    }
+    .client-thanks{
+      border:1px solid var(--line);
+      background:rgba(200,164,93,.08);
+      border-radius:18px;
+      padding:18px;
+      margin-top:16px;
+      color:#f7ead0;
+      line-height:1.6;
+      font-size:15px;
+    }
+
     @media(max-width:820px){.wrap{grid-template-columns:1fr}.hero{padding:24px}h1{font-size:34px}.grid{grid-template-columns:1fr}}
   </style>
 </head>
@@ -205,8 +226,10 @@
             Wyrażam zgodę na kontakt w sprawie oferty ADEZO.
           </label>
 
-          <div id="result" class="summary hidden"></div>
           <div id="success" class="success hidden"></div>
+          <a id="modelsLink" class="models-link hidden" href="https://adezodoors.com/pl/nasze-modele/">
+            Zobacz nasze modele →
+          </a>
         </section>
 
         <div id="error" class="error"></div>
@@ -228,8 +251,8 @@
   const next = document.getElementById('next');
   const submit = document.getElementById('submit');
   const error = document.getElementById('error');
-  const result = document.getElementById('result');
   const success = document.getElementById('success');
+  const modelsLink = document.getElementById('modelsLink');
   let current = 0;
 
   const UTM_KEYS = ['utm_source','utm_medium','utm_campaign','utm_content'];
@@ -299,11 +322,13 @@
     render();
   };
 
-  form.onsubmit = (e) => {
+  form.onsubmit = async (e) => {
     e.preventDefault();
     if (!validateStep()) return;
+
     const data = collect();
     const lead = scoreLead(data);
+
     const payload = {
       ...data,
       lead_score: lead.score,
@@ -312,44 +337,75 @@
       created_at: new Date().toISOString()
     };
 
-    result.classList.remove('hidden');
-    success.classList.remove('hidden');
-    result.textContent =
-`Temperatura leada: ${lead.temperature}
-Score: ${lead.score}/100
-
-Payload do Livespace / webhook:
-${JSON.stringify(payload, null, 2)}`;
-
     console.log('ADEZO_LEAD_PAYLOAD', payload);
 
     submit.disabled = true;
     submit.textContent = 'Wysyłanie...';
+    error.textContent = '';
+    success.classList.add('hidden');
+    modelsLink.classList.add('hidden');
 
     const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbwbFB7t-kQveWG2kc8RNqIMubE-2ts6zoDbX1TMFGtNZ38J95wHVneRdo5BiqKLbyv1wg/exec';
 
-    fetch(googleScriptUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-    .then(() => {
-      console.log('Dane wysłane do Arkusza Google');
-      error.textContent = '';
-      success.textContent = 'Dziękujemy! Twoje zapytanie zostało zarejestrowane w ADEZO.';
+    try {
+      // 1. Zapis do Google Sheets / webhook
+      await fetch(googleScriptUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      // 2. E-mail na info@adezo.pl przez FormSubmit
+      const mailData = new FormData();
+      mailData.append('_subject', 'Nowy lead ADEZO - formularz premium');
+      mailData.append('_captcha', 'false');
+      mailData.append('_template', 'table');
+
+      mailData.append('Imię i nazwisko', payload.client_name || '');
+      mailData.append('Telefon', payload.client_phone || '');
+      mailData.append('Email', payload.client_email || '');
+      mailData.append('Miasto inwestycji', payload.investment_city || '');
+      mailData.append('Etap inwestycji', payload.investment_stage || '');
+      mailData.append('Planowany montaż', payload.planned_installation || '');
+      mailData.append('Współpraca z architektem', payload.architect_collaboration || '');
+      mailData.append('Preferowany styl', payload.style_preference || '');
+      mailData.append('Budżet', payload.budget_range || '');
+      mailData.append('Opis / inspiracje', payload.inspiration_note || '');
+      mailData.append('Temperatura leada', payload.lead_temperature || '');
+      mailData.append('Score leada', String(payload.lead_score || ''));
+      mailData.append('UTM source', payload.utm_source || '');
+      mailData.append('UTM medium', payload.utm_medium || '');
+      mailData.append('UTM campaign', payload.utm_campaign || '');
+      mailData.append('UTM content', payload.utm_content || '');
+      mailData.append('Data zgłoszenia', payload.created_at || '');
+
+      await fetch('https://formsubmit.co/ajax/info@adezo.pl', {
+        method: 'POST',
+        body: mailData
+      });
+
+      success.innerHTML = `
+        <div class="client-thanks">
+          <strong>Dziękujemy.</strong><br><br>
+          Twoje zapytanie zostało wysłane.<br><br>
+          Doradca premium ADEZO skontaktuje się z Tobą w ciągu 15 minut.
+        </div>
+      `;
       success.classList.remove('hidden');
+      modelsLink.classList.remove('hidden');
+
       submit.textContent = 'Wysłano pomyślnie';
       form.reset();
-    })
-    .catch(err => {
-      console.error('Błąd krytyczny:', err);
-      error.textContent = 'Problem z połączeniem. Spróbuj ponownie za chwilę.';
+
+    } catch (err) {
+      console.error('Błąd wysyłki:', err);
+      error.textContent = 'Problem z wysłaniem formularza. Spróbuj ponownie albo zadzwoń: +48 882 402 271.';
       submit.disabled = false;
       submit.textContent = 'Wyślij zgłoszenie';
-    })
+    }
   };
 
   render();
